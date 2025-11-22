@@ -14,10 +14,34 @@
 - 当两个实体都没有PVP标志时，如果两个实体都是玩家，则返回敌对关系 (`kEntityRelation_Foe`)
 - 这样实现了全地图强制PVP，所有玩家之间默认处于敌对状态
 
+## 重要说明 ⚠️
+
+**本仓库仅包含修改后的源代码文件，不包含完整的项目文件。**
+
+要编译 GameServer.exe，您需要：
+1. **完整的源代码库**（包含所有 .vcxproj 和项目文件）
+2. 将本仓库的 `CrossRoads/Common/pvp_common.c` 替换到您的完整项目
+3. 在本地使用 Visual Studio 编译
+
 ## 安装方法
 
-1. 将 `CrossRoads/Common/pvp_common.c` 文件复制到项目对应目录
-2. 重新编译项目
+### 步骤 1: 下载修改后的文件
+从本仓库下载 `CrossRoads/Common/pvp_common.c`
+
+### 步骤 2: 替换到您的项目
+将下载的文件复制到您的完整源代码库：
+```
+您的项目路径/CrossRoads/Common/pvp_common.c
+```
+
+### 步骤 3: 编译项目
+在 Visual Studio 中：
+1. 打开 `GameServer/NNOGameServer.sln`
+2. 先编译 `GameServerLib`（包含修改后的 pvp_common.c）
+3. 再编译 `GameServer` 项目
+4. 编译完成后，GameServer.exe 位于 `bin/GameServer.exe`
+
+详细步骤请参阅 `BUILD_GAMESERVER.md`
 
 ### 编译顺序（重要）
 
