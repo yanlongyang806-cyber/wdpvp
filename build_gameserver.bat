@@ -56,3 +56,4 @@ if exist "I:\gp5\bin\GameServer.exe" (
 
 pause
 
+
