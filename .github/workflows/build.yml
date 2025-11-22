@@ -18,9 +18,14 @@ jobs:
     - name: List files for debugging
       run: |
         Write-Host "=== Repository Structure ==="
-        Get-ChildItem -Recurse | Select-Object FullName | ForEach-Object {
+        Get-ChildItem -Recurse -File | Select-Object FullName | ForEach-Object {
           $relPath = $_.FullName.Replace("$PWD\", "")
           Write-Host $relPath
+        } | Select-Object -First 50
+        Write-Host "`n=== Looking for .vcxproj files ==="
+        Get-ChildItem -Recurse -Filter "*.vcxproj" -ErrorAction SilentlyContinue | ForEach-Object {
+          $relPath = $_.FullName.Replace("$PWD\", "")
+          Write-Host "Found: $relPath"
         }
         
     - name: Setup MSBuild
@@ -28,37 +33,111 @@ jobs:
       
     - name: Build GameServerLib
       run: |
-        Write-Host "Building GameServerLib (contains modified pvp_common.c)..."
-        if (Test-Path "CrossRoads\GameServerLib\GameServerLib.vcxproj") {
-          msbuild CrossRoads\GameServerLib\GameServerLib.vcxproj /p:Configuration=Release /p:Platform=Win32 /m /v:minimal
-        } elseif (Test-Path "src\CrossRoads\GameServerLib\GameServerLib.vcxproj") {
-          msbuild src\CrossRoads\GameServerLib\GameServerLib.vcxproj /p:Configuration=Release /p:Platform=Win32 /m /v:minimal
-        } else {
-          Write-Host "GameServerLib.vcxproj not found"
+        Write-Host "=== Building GameServerLib ==="
+        $libPaths = @(
+          "src\CrossRoads\GameServerLib\GameServerLib.vcxproj",
+          "CrossRoads\GameServerLib\GameServerLib.vcxproj"
+        )
+        $built = $false
+        foreach ($path in $libPaths) {
+          if (Test-Path $path) {
+            Write-Host "Found project file: $path"
+            Write-Host "Building..."
+            msbuild $path /p:Configuration=Release /p:Platform=Win32 /m /v:minimal /t:Rebuild
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "✓ GameServerLib built successfully"
+              $built = $true
+              break
+            } else {
+              Write-Host "✗ Build failed with exit code: $LASTEXITCODE"
+            }
+          }
+        }
+        if (-not $built) {
+          Write-Host "⚠ GameServerLib.vcxproj not found or build failed"
         }
       continue-on-error: true
       
     - name: Build GameServer
       run: |
-        Write-Host "Building GameServer..."
-        if (Test-Path "src\Night\GameServer\NNOGameServer.vcxproj") {
-          msbuild src\Night\GameServer\NNOGameServer.vcxproj /p:Configuration=Release /p:Platform=Win32 /m /v:minimal
-        } elseif (Test-Path "GameServer\NNOGameServer.vcxproj") {
-          msbuild GameServer\NNOGameServer.vcxproj /p:Configuration=Release /p:Platform=Win32 /m /v:minimal
-        } else {
-          Write-Host "NNOGameServer.vcxproj not found in expected locations"
+        Write-Host "=== Building GameServer ==="
+        $gameServerPaths = @(
+          "src\Night\GameServer\NNOGameServer.vcxproj",
+          "Night\GameServer\NNOGameServer.vcxproj",
+          "GameServer\NNOGameServer.vcxproj"
+        )
+        $built = $false
+        foreach ($path in $gameServerPaths) {
+          if (Test-Path $path) {
+            Write-Host "Found project file: $path"
+            Write-Host "Building..."
+            msbuild $path /p:Configuration=Release /p:Platform=Win32 /m /v:minimal /t:Rebuild
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "✓ GameServer built successfully"
+              $built = $true
+              break
+            } else {
+              Write-Host "✗ Build failed with exit code: $LASTEXITCODE"
+            }
+          }
+        }
+        if (-not $built) {
+          Write-Host "⚠ NNOGameServer.vcxproj not found or build failed"
         }
       continue-on-error: true
       
+    - name: Search for GameServer.exe
+      run: |
+        Write-Host "=== Searching for GameServer.exe ==="
+        $searchPaths = @(
+          "bin",
+          "src\bin",
+          "src\Night\GameServer\bin",
+          "Night\GameServer\bin",
+          "GameServer\bin",
+          "obj",
+          "src\obj"
+        )
+        $found = $false
+        foreach ($path in $searchPaths) {
+          if (Test-Path $path) {
+            Write-Host "`nChecking: $path"
+            Get-ChildItem -Path $path -Recurse -Filter "GameServer*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "  ✓ Found: $($_.FullName)"
+              Write-Host "    Size: $([math]::Round($_.Length / 1MB, 2)) MB"
+              $found = $true
+            }
+          }
+        }
+        if (-not $found) {
+          Write-Host "⚠ GameServer.exe not found in expected locations"
+          Write-Host "`nSearching all .exe files in repository:"
+          Get-ChildItem -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
+            $relPath = $_.FullName.Replace("$PWD\", "")
+            Write-Host "  $relPath ($([math]::Round($_.Length / 1KB, 2)) KB)"
+          }
+        }
+        
     - name: Upload GameServer.exe artifact
       uses: actions/upload-artifact@v4
-      if: success()
+      if: always()
       with:
-        name: GameServer.exe
+        name: GameServer
         path: |
-          bin/GameServer.exe
-          bin/GameServerFD.exe
-          **/bin/GameServer.exe
-          **/bin/GameServerFD.exe
+          **/bin/**/GameServer*.exe
+          **/bin/**/GameServerFD*.exe
+          **/obj/**/GameServer*.exe
+          **/Release/**/GameServer*.exe
+          **/Debug/**/GameServer*.exe
         if-no-files-found: ignore
         retention-days: 30
+        
+    - name: Upload all .exe files (fallback)
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: All-Executables
+        path: |
+          **/*.exe
+        if-no-files-found: ignore
+        retention-days: 7
