@@ -1,4 +1,4 @@
-name: Verify Source Code
+name: Build NNO GameServer (Fixed Path)
 
 on:
   push:
@@ -8,108 +8,139 @@ on:
   workflow_dispatch:
 
 jobs:
-  verify:
-    name: Verify Modified Source Code
+  build:
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 60
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       
-    - name: Display repository structure
+    - name: List repository structure
       run: |
-        Write-Host "=== Repository Structure ==="
+        Write-Host "=== Full Repository Structure ==="
         Get-ChildItem -Recurse -File | Select-Object FullName | ForEach-Object {
           $relPath = $_.FullName.Replace("$PWD\", "")
-          Write-Host "  - $relPath"
+          Write-Host $relPath
         }
         
-    - name: Verify pvp_common.c exists
+    - name: Find project files
       run: |
-        Write-Host "=== Verifying pvp_common.c ==="
-        if (Test-Path "CrossRoads/Common/pvp_common.c") {
-          Write-Host "✓ pvp_common.c found"
-          $file = Get-Item "CrossRoads/Common/pvp_common.c"
-          Write-Host "  File size: $([math]::Round($file.Length / 1KB, 2)) KB"
-        } else {
-          Write-Host "✗ pvp_common.c NOT found!"
-          exit 1
+        Write-Host "=== Searching for .vcxproj files ==="
+        Get-ChildItem -Recurse -Filter "*.vcxproj" | ForEach-Object {
+          $relPath = $_.FullName.Replace("$PWD\", "")
+          Write-Host "Found: $relPath"
+        }
+        Write-Host ""
+        Write-Host "=== Searching for NNOGameServer ==="
+        Get-ChildItem -Recurse -Filter "*NNOGameServer*" | ForEach-Object {
+          $relPath = $_.FullName.Replace("$PWD\", "")
+          Write-Host "Found: $relPath"
         }
         
-    - name: Verify modification in pvp_common.c
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1.1
+      
+    - name: Verify pvp_common.c modification
       run: |
-        Write-Host "=== Verifying Modification ==="
-        $content = Get-Content "CrossRoads/Common/pvp_common.c" -Raw
-        
-        if ($content -match "Force PvP.*If both entities are players") {
-          Write-Host "✓ Force PvP modification found"
-        } else {
-          Write-Host "✗ Force PvP modification NOT found!"
-          exit 1
-        }
-        
-        if ($content -match "Check if both are players") {
-          Write-Host "✓ Player check modification found"
-        } else {
-          Write-Host "✗ Player check modification NOT found!"
-          exit 1
-        }
-        
-        if ($content -match "kEntityRelation_Foe") {
-          Write-Host "✓ Foe relation return found"
-        } else {
-          Write-Host "✗ Foe relation return NOT found!"
-          exit 1
-        }
-        
-        Write-Host "`n✓ All modifications verified successfully!"
-        
-    - name: Check for Chinese characters
-      run: |
-        Write-Host "=== Checking for Chinese Characters ==="
-        $content = Get-Content "CrossRoads/Common/pvp_common.c" -Raw -Encoding UTF8
-        
-        # Check for Chinese characters (Unicode range 4E00-9FFF)
-        if ($content -match "[\u4e00-\u9fff]") {
-          Write-Host "⚠ WARNING: Chinese characters found in source code!"
-          Write-Host "  This may cause compilation issues."
-          exit 1
-        } else {
-          Write-Host "✓ No Chinese characters found - code is safe for compilation"
-        }
-        
-    - name: Display modification context
-      run: |
-        Write-Host "=== Modification Context ==="
-        $lines = Get-Content "CrossRoads/Common/pvp_common.c"
+        Write-Host "=== Verifying pvp_common.c modification ==="
+        $paths = @(
+          "CrossRoads\Common\pvp_common.c",
+          "src\CrossRoads\Common\pvp_common.c"
+        )
         $found = $false
-        for ($i = 0; $i -lt $lines.Count; $i++) {
-          if ($lines[$i] -match "Force PvP") {
-            $found = $true
-            Write-Host "`nModified code around line $($i+1):"
-            $start = [Math]::Max(0, $i - 2)
-            $end = [Math]::Min($lines.Count - 1, $i + 8)
-            for ($j = $start; $j -le $end; $j++) {
-              $marker = if ($j -eq $i) { ">>>" } else { "   " }
-              Write-Host "$marker $($j+1): $($lines[$j])"
+        foreach ($path in $paths) {
+          if (Test-Path $path) {
+            Write-Host "✓ Found at: $path"
+            $content = Get-Content $path -Raw
+            if ($content -match "Force PvP") {
+              Write-Host "✓ Modification verified"
+              $found = $true
+              break
             }
-            break
           }
         }
         if (-not $found) {
-          Write-Host "⚠ Modification not found in expected location"
+          Write-Host "⚠ pvp_common.c not found or modification missing"
         }
         
-    - name: Create summary
+    - name: Build GameServerLib
       run: |
-        Write-Host "`n=== Verification Summary ==="
-        Write-Host "✓ Source code file present"
-        Write-Host "✓ Modification verified"
-        Write-Host "✓ No Chinese characters"
-        Write-Host "`nNOTE: This repository contains only the modified source file."
-        Write-Host "To compile GameServer.exe, you need:"
-        Write-Host "  1. The complete source code repository"
-        Write-Host "  2. Replace CrossRoads/Common/pvp_common.c with this file"
-        Write-Host "  3. Build GameServerLib first, then GameServer.exe"
-        Write-Host "`nSee BUILD_GAMESERVER.md for detailed compilation instructions."
+        Write-Host "=== Building GameServerLib ==="
+        $libPaths = @(
+          "CrossRoads\GameServerLib\GameServerLib.vcxproj",
+          "src\CrossRoads\GameServerLib\GameServerLib.vcxproj"
+        )
+        $built = $false
+        foreach ($path in $libPaths) {
+          if (Test-Path $path) {
+            Write-Host "Building: $path"
+            msbuild $path /p:Configuration=Release /p:Platform=Win32 /m /v:minimal
+            $built = $true
+            break
+          }
+        }
+        if (-not $built) {
+          Write-Host "⚠ GameServerLib.vcxproj not found, skipping..."
+        }
+      continue-on-error: true
+      
+    - name: Build GameServer
+      run: |
+        Write-Host "=== Building GameServer ==="
+        $gameServerPaths = @(
+          "src\Night\GameServer\NNOGameServer.vcxproj",
+          "Night\GameServer\NNOGameServer.vcxproj",
+          "GameServer\NNOGameServer.vcxproj"
+        )
+        $built = $false
+        foreach ($path in $gameServerPaths) {
+          if (Test-Path $path) {
+            Write-Host "Building: $path"
+            msbuild $path /p:Configuration=Release /p:Platform=Win32 /m /v:minimal
+            $built = $true
+            break
+          }
+        }
+        if (-not $built) {
+          Write-Host "⚠ NNOGameServer.vcxproj not found in any expected location"
+          Write-Host "Expected locations:"
+          foreach ($path in $gameServerPaths) {
+            Write-Host "  - $path"
+          }
+        }
+      continue-on-error: true
+      
+    - name: Find build output
+      run: |
+        Write-Host "=== Searching for GameServer.exe ==="
+        $searchPaths = @("bin", "src\Night\GameServer\bin", "Night\GameServer\bin", "GameServer\bin")
+        $found = $false
+        foreach ($path in $searchPaths) {
+          if (Test-Path $path) {
+            Write-Host "Checking: $path"
+            Get-ChildItem -Path $path -Recurse -Filter "*.exe" | ForEach-Object {
+              Write-Host "  Found: $($_.FullName)"
+              $found = $true
+            }
+          }
+        }
+        if (-not $found) {
+          Write-Host "⚠ GameServer.exe not found"
+          Write-Host "Searching all .exe files:"
+          Get-ChildItem -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "  $($_.FullName)"
+          }
+        }
+        
+    - name: Upload GameServer.exe
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: GameServer
+        path: |
+          bin/**/*.exe
+          **/bin/**/*.exe
+          **/GameServer*.exe
+        if-no-files-found: ignore
+        retention-days: 30

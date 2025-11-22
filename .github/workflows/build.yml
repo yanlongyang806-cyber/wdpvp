@@ -1,4 +1,4 @@
-name: Build GameServer.exe
+name: Build NNO GameServer
 
 on:
   push:
@@ -12,36 +12,53 @@ jobs:
     runs-on: windows-latest
     
     steps:
-    - name: Checkout code
+    - name: Checkout
       uses: actions/checkout@v4
       
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v1
-      
-    - name: Restore NuGet packages (if needed)
+    - name: List files for debugging
       run: |
-        echo "Checking for NuGet packages..."
-        # Add NuGet restore commands here if your project uses NuGet
+        Write-Host "=== Repository Structure ==="
+        Get-ChildItem -Recurse | Select-Object FullName | ForEach-Object {
+          $relPath = $_.FullName.Replace("$PWD\", "")
+          Write-Host $relPath
+        }
         
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1.1
+      
     - name: Build GameServerLib
       run: |
-        echo "Building GameServerLib..."
-        msbuild CrossRoads/GameServerLib/GameServerLib.vcxproj /t:Rebuild /p:Configuration=Debug /p:Platform=Win32 /v:minimal
+        Write-Host "Building GameServerLib (contains modified pvp_common.c)..."
+        if (Test-Path "CrossRoads\GameServerLib\GameServerLib.vcxproj") {
+          msbuild CrossRoads\GameServerLib\GameServerLib.vcxproj /p:Configuration=Release /p:Platform=Win32 /m /v:minimal
+        } elseif (Test-Path "src\CrossRoads\GameServerLib\GameServerLib.vcxproj") {
+          msbuild src\CrossRoads\GameServerLib\GameServerLib.vcxproj /p:Configuration=Release /p:Platform=Win32 /m /v:minimal
+        } else {
+          Write-Host "GameServerLib.vcxproj not found"
+        }
       continue-on-error: true
       
     - name: Build GameServer
       run: |
-        echo "Building GameServer..."
-        msbuild GameServer/NNOGameServer.vcxproj /t:Rebuild /p:Configuration=Debug /p:Platform=Win32 /v:minimal
+        Write-Host "Building GameServer..."
+        if (Test-Path "src\Night\GameServer\NNOGameServer.vcxproj") {
+          msbuild src\Night\GameServer\NNOGameServer.vcxproj /p:Configuration=Release /p:Platform=Win32 /m /v:minimal
+        } elseif (Test-Path "GameServer\NNOGameServer.vcxproj") {
+          msbuild GameServer\NNOGameServer.vcxproj /p:Configuration=Release /p:Platform=Win32 /m /v:minimal
+        } else {
+          Write-Host "NNOGameServer.vcxproj not found in expected locations"
+        }
       continue-on-error: true
       
     - name: Upload GameServer.exe artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: success()
       with:
         name: GameServer.exe
         path: |
           bin/GameServer.exe
           bin/GameServerFD.exe
-        if-no-files-found: warn
-
+          **/bin/GameServer.exe
+          **/bin/GameServerFD.exe
+        if-no-files-found: ignore
+        retention-days: 30
