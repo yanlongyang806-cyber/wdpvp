@@ -1,4 +1,4 @@
-name: Build NNO GameServer (Fixed Path)
+name: Build NNO GameServer (Final Full Version)
 
 on:
   push:
@@ -16,131 +16,114 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       
-    - name: List repository structure
+    - name: List all repository files
       run: |
-        Write-Host "=== Full Repository Structure ==="
-        Get-ChildItem -Recurse -File | Select-Object FullName | ForEach-Object {
-          $relPath = $_.FullName.Replace("$PWD\", "")
-          Write-Host $relPath
-        }
+        Write-Host "=== Repository Structure ==="
+        Get-ChildItem -Recurse -File | Select-Object FullName
         
-    - name: Find project files
+    - name: Find all project files
       run: |
         Write-Host "=== Searching for .vcxproj files ==="
         Get-ChildItem -Recurse -Filter "*.vcxproj" | ForEach-Object {
-          $relPath = $_.FullName.Replace("$PWD\", "")
-          Write-Host "Found: $relPath"
+          Write-Host "Found project: $($_.FullName)"
         }
-        Write-Host ""
-        Write-Host "=== Searching for NNOGameServer ==="
-        Get-ChildItem -Recurse -Filter "*NNOGameServer*" | ForEach-Object {
-          $relPath = $_.FullName.Replace("$PWD\", "")
-          Write-Host "Found: $relPath"
-        }
-        
+
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v1.1
-      
-    - name: Verify pvp_common.c modification
-      run: |
-        Write-Host "=== Verifying pvp_common.c modification ==="
-        $paths = @(
-          "CrossRoads\Common\pvp_common.c",
-          "src\CrossRoads\Common\pvp_common.c"
-        )
-        $found = $false
-        foreach ($path in $paths) {
-          if (Test-Path $path) {
-            Write-Host "✓ Found at: $path"
-            $content = Get-Content $path -Raw
-            if ($content -match "Force PvP") {
-              Write-Host "✓ Modification verified"
-              $found = $true
-              break
-            }
-          }
-        }
-        if (-not $found) {
-          Write-Host "⚠ pvp_common.c not found or modification missing"
-        }
-        
+
+
+    # ----------------------------------------------
+    #    Build GameServerLib  (如果不存在则跳过)
+    # ----------------------------------------------
     - name: Build GameServerLib
       run: |
         Write-Host "=== Building GameServerLib ==="
-        $libPaths = @(
+        $paths = @(
           "CrossRoads\GameServerLib\GameServerLib.vcxproj",
           "src\CrossRoads\GameServerLib\GameServerLib.vcxproj"
         )
         $built = $false
-        foreach ($path in $libPaths) {
-          if (Test-Path $path) {
-            Write-Host "Building: $path"
-            msbuild $path /p:Configuration=Release /p:Platform=Win32 /m /v:minimal
+        
+        foreach ($p in $paths) {
+          if (Test-Path $p) {
+            Write-Host "Building GameServerLib: $p"
+            msbuild $p /p:Configuration=Release /p:Platform=Win32 /m /v:minimal
             $built = $true
             break
-          }
-        }
-        if (-not $built) {
-          Write-Host "⚠ GameServerLib.vcxproj not found, skipping..."
-        }
-      continue-on-error: true
-      
-    - name: Build GameServer
-      run: |
-        Write-Host "=== Building GameServer ==="
-        $gameServerPaths = @(
-          "src\Night\GameServer\NNOGameServer.vcxproj",
-          "Night\GameServer\NNOGameServer.vcxproj",
-          "GameServer\NNOGameServer.vcxproj"
-        )
-        $built = $false
-        foreach ($path in $gameServerPaths) {
-          if (Test-Path $path) {
-            Write-Host "Building: $path"
-            msbuild $path /p:Configuration=Release /p:Platform=Win32 /m /v:minimal
-            $built = $true
-            break
-          }
-        }
-        if (-not $built) {
-          Write-Host "⚠ NNOGameServer.vcxproj not found in any expected location"
-          Write-Host "Expected locations:"
-          foreach ($path in $gameServerPaths) {
-            Write-Host "  - $path"
-          }
-        }
-      continue-on-error: true
-      
-    - name: Find build output
-      run: |
-        Write-Host "=== Searching for GameServer.exe ==="
-        $searchPaths = @("bin", "src\Night\GameServer\bin", "Night\GameServer\bin", "GameServer\bin")
-        $found = $false
-        foreach ($path in $searchPaths) {
-          if (Test-Path $path) {
-            Write-Host "Checking: $path"
-            Get-ChildItem -Path $path -Recurse -Filter "*.exe" | ForEach-Object {
-              Write-Host "  Found: $($_.FullName)"
-              $found = $true
-            }
-          }
-        }
-        if (-not $found) {
-          Write-Host "⚠ GameServer.exe not found"
-          Write-Host "Searching all .exe files:"
-          Get-ChildItem -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
-            Write-Host "  $($_.FullName)"
           }
         }
         
-    - name: Upload GameServer.exe
+        if (-not $built) {
+          Write-Host "⚠ GameServerLib NOT found — skipped"
+        }
+      continue-on-error: true
+
+
+    # ----------------------------------------------
+    #    Build GameServer 主程序
+    # ----------------------------------------------
+    - name: Build GameServer
+      run: |
+        Write-Host "=== Building GameServer ==="
+        $paths = @(
+          "src\Night\GameServer\NNOGameServer.vcxproj",
+          "Night\GameServer\NNOGameServer.vcxproj",
+          "GameServer\NNOGameServer.vcxproj",
+          "src\Night\GameServer\GameServer.vcxproj",
+          "Night\GameServer\GameServer.vcxproj"
+        )
+        $built = $false
+        
+        foreach ($p in $paths) {
+          if (Test-Path $p) {
+            Write-Host "Building GameServer: $p"
+            msbuild $p /p:Configuration=Release /p:Platform=Win32 /m /v:minimal
+            $built = $true
+            break
+          }
+        }
+        
+        if (-not $built) {
+          Write-Host "❌ ERROR: No GameServer project found!"
+        }
+      continue-on-error: false
+
+
+    # ----------------------------------------------
+    #    显示所有 Release 输出
+    # ----------------------------------------------
+    - name: Show Release outputs
+      run: |
+        Write-Host "=== Searching for Release/Debug outputs ==="
+        Get-ChildItem -Recurse -Directory -Filter "Release" | ForEach-Object {
+          Write-Host ""
+          Write-Host "Release folder: $($_.FullName)"
+          Get-ChildItem $_.FullName -File | ForEach-Object {
+            Write-Host "  Output: $($_.Name)"
+          }
+        }
+        Get-ChildItem -Recurse -Directory -Filter "Debug" | ForEach-Object {
+          Write-Host ""
+          Write-Host "Debug folder: $($_.FullName)"
+          Get-ChildItem $_.FullName -File | ForEach-Object {
+            Write-Host "  Output: $($_.Name)"
+          }
+        }
+
+
+    # ----------------------------------------------
+    #    上传所有 exe 作为构建产物
+    # ----------------------------------------------
+    - name: Upload ALL Server Executables
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: GameServer
+        name: GameServer-Build
         path: |
-          bin/**/*.exe
-          **/bin/**/*.exe
-          **/GameServer*.exe
-        if-no-files-found: ignore
+          **/*.exe
+          **/Release/**
+          **/Debug/**
+          src/**/Release/**
+          src/**/Debug/**
+        if-no-files-found: warn
         retention-days: 30
