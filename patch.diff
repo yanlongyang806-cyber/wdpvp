@@ -1,0 +1,20 @@
+--- a/CrossRoads/Common/pvp_common.c
++++ b/CrossRoads/Common/pvp_common.c
+@@ -73,7 +73,13 @@ int entity_PVP_GetRelation(Entity *e1, Entity *e2)
+ 	teamFlag1 = e1->pChar->pvpTeamDuelFlag;
+ 	teamFlag2 = e2->pChar->pvpTeamDuelFlag;
+ 
+-	if(!flag1 && !flag2 && !teamFlag1 && !teamFlag2)
+-		return kEntityRelation_Unknown;
++	// 强制PVP：如果两个实体都是玩家且都没有PVP标志，则返回敌对关系
++	if(!flag1 && !flag2 && !teamFlag1 && !teamFlag2)
++	{
++		// 检查是否都是玩家，如果是则强制PVP
++		if(e1->pPlayer && e2->pPlayer)
++			return kEntityRelation_Foe;
++		return kEntityRelation_Unknown;
++	}
+ 
+ 	if(!flag2 && flag1 && !teamFlag2)
+ 		return entity_PVP_GetFlagHalfRelationOut(flag1);
+

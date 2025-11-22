@@ -1,0 +1,34 @@
+安装说明
+========
+
+快速安装步骤：
+-------------
+
+1. 备份原文件（可选但推荐）
+   复制项目中的 CrossRoads/Common/pvp_common.c 到备份位置
+
+2. 替换文件
+   将 _upload_pvp/CrossRoads/Common/pvp_common.c 
+   复制到项目对应的 CrossRoads/Common/ 目录下
+
+3. 重新编译
+   在项目根目录执行编译命令
+
+文件清单：
+---------
+✓ CrossRoads/Common/pvp_common.c  - 修改后的源文件
+✓ README.md                       - 详细说明文档
+✓ CHANGELOG.txt                   - 变更日志
+✓ patch.diff                      - Git diff格式的补丁文件
+✓ INSTALL.txt                     - 本安装说明文件
+
+注意事项：
+---------
+- 确保在编译前已正确替换文件
+- 建议在修改前先进行代码备份
+- 编译后需要重启服务器才能生效
+
+技术支持：
+---------
+如有问题，请查看 README.md 中的详细说明和代码变更详情。
+

@@ -1,0 +1,90 @@
+GameServer.exe 编译依赖分析报告
+=====================================
+
+修改文件: CrossRoads/Common/pvp_common.c
+
+编译 GameServer.exe 所需的最小依赖
+----------------------------------
+
+1. 核心修改文件
+   ✓ CrossRoads/Common/pvp_common.c (已修改)
+
+2. 项目依赖关系
+   
+   GameServer.exe (输出)
+   ├── GameServerLib.lib (静态库)
+   │   ├── 包含 pvp_common.c (已修改)
+   │   └── 其他 GameServerLib 源文件
+   ├── AILib.lib
+   ├── ContentLib.lib
+   ├── HttpLib.lib
+   ├── PatchClientLib.lib
+   ├── ServerLib.lib
+   ├── StructParserStub.lib
+   ├── UtilitiesLib.lib
+   └── WorldLib.lib
+
+3. 系统库依赖
+   - ws2_32.lib (Windows Socket)
+   - kernel32.lib (Windows Kernel)
+   - Imm32.lib (Input Method)
+   - Msacm32.lib (Audio Compression)
+
+编译顺序
+--------
+
+1. 重新编译 GameServerLib
+   - 因为 pvp_common.c 被包含在 GameServerLib.vcxproj 中
+   - 位置: CrossRoads/GameServerLib/GameServerLib.vcxproj (第443行)
+
+2. 重新编译 GameServer.exe
+   - 项目文件: GameServer/NNOGameServer.vcxproj
+   - 依赖 GameServerLib.lib
+
+最小上传包内容
+--------------
+
+必需文件:
+  ✓ CrossRoads/Common/pvp_common.c (修改后的源代码)
+
+可选文件:
+  - CrossRoads/Common/pvp_common.h (头文件，未修改，不需要上传)
+
+文档文件:
+  ✓ README.md (说明文档)
+  ✓ DEPENDENCIES.md (依赖分析)
+  ✓ BUILD_REQUIREMENTS.txt (本文件)
+  ✓ CHANGELOG.txt (变更日志)
+  ✓ INSTALL.txt (安装说明)
+  ✓ patch.diff (Git补丁)
+
+验证清单
+--------
+
+在编译前请确认:
+[ ] pvp_common.c 已替换到正确位置
+[ ] GameServerLib 项目已包含 pvp_common.c
+[ ] 所有依赖库已编译完成
+[ ] Visual Studio 项目配置正确
+
+编译命令提示
+------------
+
+在 Visual Studio 中:
+1. 打开解决方案: GameServer/NNOGameServer.sln
+2. 选择配置: Debug 或 Full Debug
+3. 右键 GameServerLib -> 重新生成
+4. 右键 GameServer -> 重新生成
+
+或者使用 MSBuild:
+  msbuild GameServer\NNOGameServer.sln /t:GameServerLib:Rebuild /p:Configuration=Debug
+  msbuild GameServer\NNOGameServer.sln /t:GameServer:Rebuild /p:Configuration=Debug
+
+注意事项
+--------
+
+1. pvp_common.c 被多个项目引用，但只有 GameServer.exe 必需
+2. 其他引用此文件的项目（AppServerLib, GameClientLib等）如需要也应重新编译
+3. 头文件 pvp_common.h 未修改，不需要重新包含
+4. 自动生成的文件（AutoGen）会在编译时自动更新
+

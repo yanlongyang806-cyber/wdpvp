@@ -1,0 +1,31 @@
+# Git 忽略文件
+# 编译生成的文件
+*.obj
+*.o
+*.lib
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.exp
+
+# Visual Studio 文件
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# 临时文件
+*~
+*.swp
+*.tmp
+*.bak
+
+# 自动生成的文件
+AutoGen/
+*.autogen.*
+*.ast.*
+
+# 日志文件
+*.log
+
