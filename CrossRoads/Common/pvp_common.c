@@ -73,10 +73,10 @@ int entity_PVP_GetRelation(Entity *e1, Entity *e2)
 	teamFlag1 = e1->pChar->pvpTeamDuelFlag;
 	teamFlag2 = e2->pChar->pvpTeamDuelFlag;
 
-	// 强制PVP：如果两个实体都是玩家且都没有PVP标志，则返回敌对关系
+	// Force PvP: If both entities are players and have no PvP flags, return foe relation
 	if(!flag1 && !flag2 && !teamFlag1 && !teamFlag2)
 	{
-		// 检查是否都是玩家，如果是则强制PVP
+		// Check if both are players, if so force PvP
 		if(e1->pPlayer && e2->pPlayer)
 			return kEntityRelation_Foe;
 		return kEntityRelation_Unknown;
