@@ -86,58 +86,141 @@ jobs:
         }
       continue-on-error: true
       
-    - name: Search for GameServer.exe
+    - name: Deep Search for Build Outputs
       run: |
-        Write-Host "=== Searching for GameServer.exe ==="
-        $searchPaths = @(
+        Write-Host "=== Deep Search for Build Outputs ==="
+        Write-Host "`n[1] Searching for ALL .exe files (entire repository):"
+        $allExes = Get-ChildItem -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue
+        if ($allExes) {
+          foreach ($exe in $allExes) {
+            $relPath = $exe.FullName.Replace("$PWD\", "")
+            $sizeMB = [math]::Round($exe.Length / 1MB, 2)
+            $date = $exe.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
+            Write-Host "  ✓ $relPath ($sizeMB MB) [$date]"
+          }
+        } else {
+          Write-Host "  ✗ No .exe files found in repository"
+        }
+        
+        Write-Host "`n[2] Checking specific output directories:"
+        $outputPaths = @(
           "bin",
+          "Bin",
+          "BIN",
           "src\bin",
+          "src\Bin",
+          "Night\bin",
+          "Night\Bin",
+          "src\Night\bin",
+          "src\Night\Bin",
+          "GameServer\bin",
+          "GameServer\Bin",
           "src\Night\GameServer\bin",
           "Night\GameServer\bin",
-          "GameServer\bin",
           "obj",
-          "src\obj"
+          "Obj",
+          "OBJ",
+          "src\obj",
+          "Night\GameServer\obj",
+          "src\Night\GameServer\obj",
+          "Release",
+          "release",
+          "Debug",
+          "debug",
+          "x64\Release",
+          "x64\Debug",
+          "Win32\Release",
+          "Win32\Debug"
         )
-        $found = $false
-        foreach ($path in $searchPaths) {
+        
+        foreach ($path in $outputPaths) {
           if (Test-Path $path) {
-            Write-Host "`nChecking: $path"
-            Get-ChildItem -Path $path -Recurse -Filter "GameServer*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
-              Write-Host "  ✓ Found: $($_.FullName)"
-              Write-Host "    Size: $([math]::Round($_.Length / 1MB, 2)) MB"
-              $found = $true
+            Write-Host "  ✓ Directory exists: $path"
+            $files = Get-ChildItem -Path $path -Recurse -File -ErrorAction SilentlyContinue
+            if ($files) {
+              Write-Host "    Files in $path :"
+              foreach ($file in $files) {
+                $relPath = $file.FullName.Replace("$PWD\", "")
+                Write-Host "      - $relPath ($([math]::Round($file.Length / 1KB, 2)) KB)"
+              }
+            } else {
+              Write-Host "    (empty)"
             }
           }
         }
-        if (-not $found) {
-          Write-Host "⚠ GameServer.exe not found in expected locations"
-          Write-Host "`nSearching all .exe files in repository:"
-          Get-ChildItem -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
-            $relPath = $_.FullName.Replace("$PWD\", "")
-            Write-Host "  $relPath ($([math]::Round($_.Length / 1KB, 2)) KB)"
+        
+        Write-Host "`n[3] Searching for GameServer*.exe specifically:"
+        $gameServerExes = Get-ChildItem -Recurse -Filter "GameServer*.exe" -ErrorAction SilentlyContinue
+        if ($gameServerExes) {
+          foreach ($exe in $gameServerExes) {
+            $relPath = $exe.FullName.Replace("$PWD\", "")
+            $sizeMB = [math]::Round($exe.Length / 1MB, 2)
+            Write-Host "  ✓ FOUND: $relPath ($sizeMB MB)"
           }
+        } else {
+          Write-Host "  ✗ GameServer*.exe not found"
         }
         
-    - name: Upload GameServer.exe artifact
+        Write-Host "`n[4] Checking if compilation actually happened:"
+        $builtDirs = @(
+          "**/bin",
+          "**/obj",
+          "**/Release",
+          "**/Debug",
+          "**/.vs",
+          "**/*.pdb"
+        )
+        $foundBuildArtifacts = $false
+        foreach ($pattern in $builtDirs) {
+          $items = Get-ChildItem -Path $pattern -Recurse -ErrorAction SilentlyContinue | Select-Object -First 5
+          if ($items) {
+            Write-Host "  ✓ Found build artifacts matching: $pattern"
+            $foundBuildArtifacts = $true
+          }
+        }
+        if (-not $foundBuildArtifacts) {
+          Write-Host "  ✗ No build artifacts found - compilation likely did not execute"
+        }
+        
+    - name: Upload GameServer.exe (primary)
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: GameServer
+        name: GameServer-Executables
         path: |
-          **/bin/**/GameServer*.exe
-          **/bin/**/GameServerFD*.exe
-          **/obj/**/GameServer*.exe
-          **/Release/**/GameServer*.exe
-          **/Debug/**/GameServer*.exe
-        if-no-files-found: ignore
+          **/bin/**/*.exe
+          **/Bin/**/*.exe
+          **/Release/**/*.exe
+          **/Debug/**/*.exe
+          **/obj/**/Release/**/*.exe
+          **/obj/**/Debug/**/*.exe
+          GameServer*.exe
+          GameServerFD*.exe
+        if-no-files-found: warn
         retention-days: 30
         
-    - name: Upload all .exe files (fallback)
+    - name: Upload ALL .exe files (fallback - entire repository)
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: All-Executables
+        name: All-Executables-Full-Repo
         path: |
           **/*.exe
+        if-no-files-found: warn
+        retention-days: 7
+        
+    - name: Upload build outputs directory (if exists)
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: Build-Output-Directories
+        path: |
+          bin/
+          Bin/
+          src/bin/
+          Night/bin/
+          obj/
+          Release/
+          Debug/
         if-no-files-found: ignore
         retention-days: 7
