@@ -1,0 +1,126 @@
+name: Compile GameServer
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+env:
+  SOLUTION_PATH: GameServer/NNOGameServer.sln
+  CONFIGURATION: Debug
+  PLATFORM: Win32
+
+jobs:
+  compile:
+    name: Compile GameServer.exe
+    runs-on: windows-latest
+    timeout-minutes: 60
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1.1
+      
+    - name: Display project structure
+      run: |
+        Write-Host "=== Project Structure ==="
+        if (Test-Path "CrossRoads/Common/pvp_common.c") {
+          Write-Host "✓ pvp_common.c found"
+        } else {
+          Write-Host "✗ pvp_common.c NOT found"
+        }
+        
+        if (Test-Path "GameServer/NNOGameServer.sln") {
+          Write-Host "✓ Solution file found"
+        } else {
+          Write-Host "✗ Solution file NOT found"
+        }
+        
+    - name: Verify pvp_common.c modification
+      run: |
+        if (Test-Path "CrossRoads/Common/pvp_common.c") {
+          $content = Get-Content "CrossRoads/Common/pvp_common.c" -Raw
+          if ($content -match "Force PvP") {
+            Write-Host "✓ Modification found in pvp_common.c"
+          } else {
+            Write-Host "✗ Modification NOT found"
+          }
+        }
+        
+    - name: Build GameServerLib
+      run: |
+        Write-Host "Building GameServerLib (contains modified pvp_common.c)..."
+        msbuild CrossRoads/GameServerLib/GameServerLib.vcxproj `
+          /t:Rebuild `
+          /p:Configuration=${{ env.CONFIGURATION }} `
+          /p:Platform=${{ env.PLATFORM }} `
+          /v:minimal `
+          /m
+      continue-on-error: true
+      
+    - name: Build GameServer
+      run: |
+        Write-Host "Building GameServer.exe..."
+        if (Test-Path "GameServer/NNOGameServer.sln") {
+          msbuild GameServer/NNOGameServer.sln `
+            /t:GameServer:Rebuild `
+            /p:Configuration=${{ env.CONFIGURATION }} `
+            /p:Platform=${{ env.PLATFORM }} `
+            /v:minimal `
+            /m
+        } else {
+          msbuild GameServer/NNOGameServer.vcxproj `
+            /t:Rebuild `
+            /p:Configuration=${{ env.CONFIGURATION }} `
+            /p:Platform=${{ env.PLATFORM }} `
+            /v:minimal `
+            /m
+        }
+      continue-on-error: true
+      
+    - name: Check build output
+      run: |
+        Write-Host "=== Checking Build Output ==="
+        $binPath = "bin"
+        if (Test-Path $binPath) {
+          Write-Host "bin directory exists"
+          Get-ChildItem -Path $binPath -Recurse -File | ForEach-Object {
+            Write-Host "  - $($_.Name) ($([math]::Round($_.Length / 1KB, 2)) KB)"
+          }
+        } else {
+          Write-Host "bin directory does not exist"
+          # Check for other possible output locations
+          $possiblePaths = @("GameServer\bin", "GameServer\Debug", "GameServer\Release", "Debug", "Release")
+          foreach ($path in $possiblePaths) {
+            if (Test-Path $path) {
+              Write-Host "Found output in: $path"
+            }
+          }
+        }
+        
+    - name: Upload GameServer.exe
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: GameServer
+        path: |
+          bin/GameServer.exe
+          bin/GameServerFD.exe
+          bin/**/*.dll
+        if-no-files-found: ignore
+        retention-days: 30
+        
+    - name: Upload build logs
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: build-logs
+        path: |
+          **/*.log
+          **/msbuild.log
+        if-no-files-found: ignore
+
